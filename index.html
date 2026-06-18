@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>入管提出用変換ツール v004</title>
+<title>入管提出用変換ツール v005</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
   :root{--bg:#f8f5ef;--card:#fffdfa;--ink:#2f2a25;--muted:#776d62;--line:#e1d7c8;--accent:#e98a3a;--bad:#c84032;--ok:#1f8a4c}
@@ -16,7 +16,7 @@
 </head>
 <body>
 <div class="app">
-  <h1>入管提出用変換ツール v004</h1>
+  <h1>入管提出用変換ツール v005</h1>
   <div class="small">PC用。学生の勤務記録Excelを読み込み、同じフォルダにある <b>template.xlsx</b> を自動で読み込んで、入管提出用Excelを作成します。</div>
 
   <section class="card">
@@ -45,7 +45,7 @@
 
   <section class="card">
     <h2>3. 入管提出用Excelを作成</h2>
-    <div class="small">テンプレートの罫線・列幅・行高・塗りつぶしをできるだけ保持し、必要行数に合わせて行を作ります。</div>
+    <div class="small">テンプレートの罫線・列幅・行高・塗りつぶしをできるだけ保持し、必要行数に合わせて行を作ります。時間は「15.0」のような数値で出力します。</div>
     <div class="tools">
       <button class="btn" id="makeBtn" disabled>入管提出用Excelをダウンロード</button>
     </div>
@@ -65,13 +65,29 @@ function deepClone(obj){ return obj ? JSON.parse(JSON.stringify(obj)) : obj; }
 function cellAddr(r,c){ return XLSX.utils.encode_cell({r,c}); }
 function getCell(ws,r,c){ return ws[cellAddr(r,c)]; }
 function getVal(ws,r,c){ const cell=getCell(ws,r,c); return cell ? String(cell.v ?? '').trim() : ''; }
-function setCell(ws,r,c,value,styleSource){
+function setCell(ws,r,c,value,styleSource, numberFormatOverride=''){
   const addr=cellAddr(r,c);
   const cell={v:value};
   if(typeof value==='number') cell.t='n'; else cell.t='s';
   if(styleSource){
     if(styleSource.s) cell.s=deepClone(styleSource.s);
     if(styleSource.z) cell.z=styleSource.z;
+  }
+  // テンプレートの罫線・塗りはできるだけ引き継ぐ。
+  // ただし、時間数セルだけは時刻形式にすると 15 → 360:00:00 になるため、
+  // 必ず「数値 0.0」形式に上書きする。
+  if(numberFormatOverride){
+    cell.z = numberFormatOverride;
+    cell.s = cell.s || {};
+    cell.s.numFmt = numberFormatOverride;
+  }
+  if(cell.s && !cell.s.border){
+    cell.s.border = {
+      top:{style:'thin',color:{rgb:'000000'}},
+      bottom:{style:'thin',color:{rgb:'000000'}},
+      left:{style:'thin',color:{rgb:'000000'}},
+      right:{style:'thin',color:{rgb:'000000'}}
+    };
   }
   ws[addr]=cell;
 }
@@ -220,8 +236,8 @@ function makeNyukanWorkbook(){
         if(header.monthCol>=0) setCell(ws,outRow,header.monthCol,i===0?ymDisplay(ym):'',style[header.monthCol]);
         if(header.jobCol>=0) setCell(ws,outRow,header.jobCol,rec.name,style[header.jobCol]);
         if(header.contentCol>=0) setCell(ws,outRow,header.contentCol,'',style[header.contentCol]);
-        if(header.jobHoursCol>=0) setCell(ws,outRow,header.jobHoursCol,Number(rec.hours.toFixed(1)),style[header.jobHoursCol]);
-        if(header.monthTotalCol>=0) setCell(ws,outRow,header.monthTotalCol,i===0?Number(rec.monthTotal.toFixed(1)):'',style[header.monthTotalCol]);
+        if(header.jobHoursCol>=0) setCell(ws,outRow,header.jobHoursCol,Number(rec.hours.toFixed(1)),style[header.jobHoursCol],'0.0');
+        if(header.monthTotalCol>=0) setCell(ws,outRow,header.monthTotalCol,i===0?Number(rec.monthTotal.toFixed(1)):'',style[header.monthTotalCol], i===0?'0.0':'');
         if(header.overCol>=0) setCell(ws,outRow,header.overCol,i===0?rec.over:'',style[header.overCol]);
         if(header.guidanceCol>=0) setCell(ws,outRow,header.guidanceCol,'',style[header.guidanceCol]);
       }
@@ -274,7 +290,7 @@ $('makeBtn').onclick = async ()=>{
     const wb=makeNyukanWorkbook();
     const months=[...new Set(summaryRows.map(r=>r.ym))].sort();
     const suffix=months.length?months[0]+'_'+months[months.length-1]:'output';
-    downloadWorkbook(wb, `nyukan_${suffix}.xlsx`);
+    downloadWorkbook(wb, `nyukan_v005_${suffix}.xlsx`);
     status('makeStatus','入管提出用Excelをダウンロードしました。', 'ok');
   }catch(e){ status('makeStatus',e.message,'error'); }
 };
